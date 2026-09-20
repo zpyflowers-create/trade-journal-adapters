@@ -1,5 +1,16 @@
 {
   "schema_version": 1,
   "channel": "stable",
-  "adapters": []
+  "adapters": [
+    {
+      "type": "gate",
+      "name": "Gate",
+      "version": "1.2.1",
+      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/gate/gate-1.2.1.zip",
+      "sha256": "142e71e85b1dc89c1917d9cc72cdf2ef02a98642a38fbc0f4ad4deb7135726a1",
+      "published_at": "2026-09-20",
+      "release_notes": "首个可信在线更新发布包；功能与内置 Gate 1.2.0 保持一致，并支持独立插件方式在线覆盖。",
+      "min_bridge_version": "2.6.51"
+    }
+  ]
 }

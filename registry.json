@@ -5,21 +5,21 @@
     {
       "type": "gate",
       "name": "Gate",
-      "version": "1.2.1",
-      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/gate/gate-1.2.1.zip",
-      "sha256": "142e71e85b1dc89c1917d9cc72cdf2ef02a98642a38fbc0f4ad4deb7135726a1",
+      "version": "1.2.2",
+      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/gate/gate-1.2.2.zip",
+      "sha256": "0f816b5474c5b334d3cff48deea341f6819854481866fc6ce73534893df30963",
       "published_at": "2026-09-20",
-      "release_notes": "首个可信在线更新发布包；功能与内置 Gate 1.2.0 保持一致，并支持独立插件方式在线覆盖。",
+      "release_notes": "修复 VPS/TLS 瞬时握手超时导致初始保护性止损监听误报；REST 自动重试，连续失败判定，恢复后自动恢复正常状态。",
       "min_bridge_version": "2.6.51"
     },
     {
       "type": "bybit",
       "name": "Bybit",
-      "version": "1.1.1",
-      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/bybit/bybit-1.1.1.zip",
-      "sha256": "792112781c0a76674ba8df0f03205579dc9aafa7cba5780e517a2703980a457c",
+      "version": "1.1.2",
+      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/bybit/bybit-1.1.2.zip",
+      "sha256": "8a0380a5364202ba15c1b3ad4f7609a62203dfd7bf271b53097274f3fefc2a94",
       "published_at": "2026-09-20",
-      "release_notes": "首个可信在线更新发布包；功能与内置 Bybit 1.1.0 保持一致，并支持独立插件方式在线覆盖。",
+      "release_notes": "修复 req_timestamp/server_timestamp/recv_window 时间偏差；服务器时间中点校准，时间戳错误自动重签重试，恢复后自动恢复正常状态。",
       "min_bridge_version": "2.6.51"
     }
   ]

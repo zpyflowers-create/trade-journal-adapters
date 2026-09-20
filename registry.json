@@ -11,6 +11,16 @@
       "published_at": "2026-09-20",
       "release_notes": "首个可信在线更新发布包；功能与内置 Gate 1.2.0 保持一致，并支持独立插件方式在线覆盖。",
       "min_bridge_version": "2.6.51"
+    },
+    {
+      "type": "bybit",
+      "name": "Bybit",
+      "version": "1.1.1",
+      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/bybit/bybit-1.1.1.zip",
+      "sha256": "792112781c0a76674ba8df0f03205579dc9aafa7cba5780e517a2703980a457c",
+      "published_at": "2026-09-20",
+      "release_notes": "首个可信在线更新发布包；功能与内置 Bybit 1.1.0 保持一致，并支持独立插件方式在线覆盖。",
+      "min_bridge_version": "2.6.51"
     }
   ]
 }

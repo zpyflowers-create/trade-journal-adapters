@@ -1,0 +1,2 @@
+# Only needed on the local packaging/test machine, not in the bridge container.
+cryptography==50.0.2

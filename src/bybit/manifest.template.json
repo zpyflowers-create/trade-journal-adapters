@@ -1,8 +1,8 @@
 {
   "type": "bybit",
   "name": "Bybit",
-  "version": "1.1.3-rc1",
-  "description": "成交分页与断线恢复候选源码；未签名，未发布。",
+  "version": "1.1.5-rc1",
+  "description": "基于 V2.10.0 内置实现的兼容性修复候选；未签名，未发布。",
   "entrypoint": "adapter.py",
   "fields": [
     {

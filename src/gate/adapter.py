@@ -68,6 +68,7 @@ class Adapter(AdapterBase):
                 raise RuntimeError(f"Gate 网络连接失败: {reason}") from e
         raise RuntimeError(f"Gate 网络连接失败: {last_error}")
 
+
     def _ws_auth(self, channel, event, ts):
         s=f"channel={channel}&event={event}&time={ts}"
         return {"method":"api_key","KEY":self.key,"SIGN":hmac.new(self.secret.encode(),s.encode(),hashlib.sha512).hexdigest()}
@@ -305,58 +306,6 @@ class Adapter(AdapterBase):
             setattr(self,attr,start)
         return start, now
 
-    @staticmethod
-    def _trade_sort_key(row):
-        from decimal import Decimal
-        # Futures REST has create_time (seconds), not necessarily create_time_ms.
-        stamp = (Decimal(str(row["create_time_ms"])) if row.get("create_time_ms")
-                 else Decimal(str(row.get("create_time") or 0)) * 1000)
-        if not stamp.is_finite() or stamp <= 0:
-            raise RuntimeError("Gate 成交时间无效；未推进水位")
-        return stamp, str(row.get("id") or row.get("trade_id") or ""), str(row.get("order_id") or "")
-
-    async def _trade_rows(self, kind, start, end):
-        """Read a fixed window completely before emitting it, oldest first.
-
-        A repeated page or the documented spot offset ceiling is an error, not
-        a successful partial sync. The caller retains its recovery watermark.
-        """
-        spot = kind == "spot"
-        path = "/spot/my_trades" if spot else "/futures/usdt/my_trades_timerange"
-        limit = 1000
-        offset = 0
-        all_rows = []
-        seen_pages = set()
-        while True:
-            if offset > 100000:
-                raise RuntimeError("Gate 成交分页超过安全上限，请缩小补同步时间范围；未推进水位")
-            params = {"from":start, "to":end, "limit":limit}
-            params.update({"page":offset // limit + 1} if spot else {"offset":offset})
-            rows = await asyncio.to_thread(self._get, path, params)
-            if not isinstance(rows, list):
-                raise RuntimeError("Gate 成交接口返回格式异常；未推进水位")
-            if not rows:
-                break
-            fingerprint = json.dumps(rows, sort_keys=True, separators=(",", ":"))
-            if fingerprint in seen_pages:
-                raise RuntimeError("Gate 成交分页重复，无法确认完整性；未推进水位")
-            seen_pages.add(fingerprint)
-            all_rows.extend(rows)
-            if len(rows) < limit:
-                break
-            offset += limit
-            await asyncio.sleep(0.05)
-        # Keep an ID scoped to its market; do not collapse fills of one order.
-        unique = {}
-        for row in all_rows:
-            key = (str(row.get("contract") or row.get("currency_pair") or ""),
-                   str(row.get("id") or row.get("trade_id") or ""))
-            if not key[1]:
-                raise RuntimeError("Gate 成交缺少唯一 ID；未推进水位")
-            if key in unique and unique[key] != row:
-                raise RuntimeError("Gate 重复成交 ID 内容冲突；未推进水位")
-            unique[key] = row
-        return sorted(unique.values(), key=self._trade_sort_key)
 
     async def _poll_spot_once(self):
         start,now=self._poll_window("spot")
@@ -370,6 +319,7 @@ class Adapter(AdapterBase):
         self._spot_poll_from=now
         return count
 
+
     async def _poll_fut_once(self):
         start,now=self._poll_window("futures")
         rows=await self._trade_rows("futures",start,now)
@@ -381,6 +331,7 @@ class Adapter(AdapterBase):
             count+=1
         self._fut_poll_from=now
         return count
+
 
     async def _fallback_window(self, kind: str, reason: Exception):
         if not self.rest_fallback_enabled:
@@ -411,6 +362,7 @@ class Adapter(AdapterBase):
                     await self.status("connected","Gate 现货成交流已连接"); backoff=2
                     async for raw in ws:
                         m=json.loads(raw)
+                        await self.health_event("stream")
                         if m.get("channel")=="spot.usertrades" and m.get("event")=="update":
                             for x in m.get("result") or []:
                                 e=self._norm_spot(x)
@@ -433,6 +385,7 @@ class Adapter(AdapterBase):
                     await self.status("connected","Gate 现货 / USDT 永续只读成交监听已连接" if self.enable_spot else "Gate USDT 永续成交流已连接"); backoff=2
                     async for raw in ws:
                         m=json.loads(raw)
+                        await self.health_event("stream")
                         if m.get("channel")=="futures.usertrades" and m.get("event")=="update":
                             for x in m.get("result") or []:
                                 e=await asyncio.to_thread(self._norm_fut,x)
@@ -479,6 +432,7 @@ class Adapter(AdapterBase):
                     self._risk_unavailable=True
                     await self.status("warning",f"Gate 初始保护性止损监听暂时不可用（连续 {self._risk_failures} 次）：{e}")
             await asyncio.sleep(4.0)
+
 
     async def run(self):
         self._check()
@@ -548,12 +502,67 @@ class Adapter(AdapterBase):
                 await self.emit(e); total+=1
             if self.enable_spot:
                 rows=await self._trade_rows("spot",start,now)
-                for x in rows:
+                for x in sorted(rows or [], key=lambda z:float(z.get("create_time_ms") or 0)):
                     await accept(self._norm_spot(x),"现货")
             if self.enable_futures:
                 rows=await self._trade_rows("futures",start,now)
-                for x in rows:
+                for x in sorted(rows or [], key=lambda z:float(z.get("create_time_ms") or 0)):
                     await accept(self._norm_fut(x,use_position_snapshot=False),"永续")
             extra=("；跳过无效成交 "+str(skipped)+" 条（"+"、".join(f"{k} {v}" for k,v in reasons.items())+"）") if skipped else ""
             return {"ok":True,"message":f"Gate 历史成交补同步完成：有效 {total} 条"+extra,"accepted":total,"skipped":skipped,"skip_reasons":reasons}
         return await super().handle_command(command)
+
+    @staticmethod
+    def _trade_sort_key(row):
+        from decimal import Decimal
+        # Futures REST has create_time (seconds), not necessarily create_time_ms.
+        stamp = (Decimal(str(row["create_time_ms"])) if row.get("create_time_ms")
+                 else Decimal(str(row.get("create_time") or 0)) * 1000)
+        if not stamp.is_finite() or stamp <= 0:
+            raise RuntimeError("Gate 成交时间无效；未推进水位")
+        return stamp, str(row.get("id") or row.get("trade_id") or ""), str(row.get("order_id") or "")
+
+
+    async def _trade_rows(self, kind, start, end):
+        """Read a fixed window completely before emitting it, oldest first.
+
+        A repeated page or the documented spot offset ceiling is an error, not
+        a successful partial sync. The caller retains its recovery watermark.
+        """
+        spot = kind == "spot"
+        path = "/spot/my_trades" if spot else "/futures/usdt/my_trades_timerange"
+        limit = 1000
+        offset = 0
+        all_rows = []
+        seen_pages = set()
+        while True:
+            if offset > 100000:
+                raise RuntimeError("Gate 成交分页超过安全上限，请缩小补同步时间范围；未推进水位")
+            params = {"from":start, "to":end, "limit":limit}
+            params.update({"page":offset // limit + 1} if spot else {"offset":offset})
+            rows = await asyncio.to_thread(self._get, path, params)
+            if not isinstance(rows, list):
+                raise RuntimeError("Gate 成交接口返回格式异常；未推进水位")
+            if not rows:
+                break
+            fingerprint = json.dumps(rows, sort_keys=True, separators=(",", ":"))
+            if fingerprint in seen_pages:
+                raise RuntimeError("Gate 成交分页重复，无法确认完整性；未推进水位")
+            seen_pages.add(fingerprint)
+            all_rows.extend(rows)
+            if len(rows) < limit:
+                break
+            offset += limit
+            await asyncio.sleep(0.05)
+        # Keep an ID scoped to its market; do not collapse fills of one order.
+        unique = {}
+        for row in all_rows:
+            key = (str(row.get("contract") or row.get("currency_pair") or ""),
+                   str(row.get("id") or row.get("trade_id") or ""))
+            if not key[1]:
+                raise RuntimeError("Gate 成交缺少唯一 ID；未推进水位")
+            if key in unique and unique[key] != row:
+                raise RuntimeError("Gate 重复成交 ID 内容冲突；未推进水位")
+            unique[key] = row
+        return sorted(unique.values(), key=self._trade_sort_key)
+

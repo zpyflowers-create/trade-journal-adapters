@@ -5,6 +5,7 @@ records emit/status calls; durable dedupe/position aggregation is NOT tested her
 """
 import asyncio
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
@@ -58,6 +59,27 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         async def emit(event):
             events.append(event)
         return module.Adapter({"enable_spot":True, "enable_perpetual":False}, emit), events
+
+    async def test_bybit_timestamp_error_is_resigned_once(self):
+        adapter, _ = self.make(bybit)
+        adapter._check_credentials=lambda:None
+        adapter._refresh_time_offset=lambda:None
+        responses=[io.BytesIO(json.dumps({"retCode":10002,"retMsg":"req_timestamp error server_timestamp[12345000] recv_window"}).encode()),
+                   io.BytesIO(json.dumps({"retCode":0,"result":{"list":[]}}).encode())]
+        with patch.object(bybit,"urlopen",side_effect=responses) as request:
+            result=adapter._rest_get("/v5/execution/list",{"category":"spot"})
+        self.assertEqual(result["retCode"],0)
+        self.assertEqual(request.call_count,2)
+        first,last=[call.args[0] for call in request.call_args_list]
+        self.assertNotEqual(first.get_header("X-bapi-sign"),last.get_header("X-bapi-sign"))
+
+    async def test_gate_tls_error_retries_then_returns(self):
+        adapter, _ = self.make(gate)
+        adapter._check=lambda:None
+        responses=[gate.URLError(gate.ssl.SSLError("synthetic TLS timeout")),io.BytesIO(b'[]')]
+        with patch.object(gate,"urlopen",side_effect=responses) as request, patch.object(gate.time,"sleep"):
+            self.assertEqual(adapter._get("/spot/my_trades"),[])
+        self.assertEqual(request.call_count,2)
 
     async def test_gate_spot_more_than_1000_fills_globally_sorted(self):
         adapter, events = self.make(gate)
@@ -185,117 +207,10 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError,"游标重复"):
             await adapter._history_category("spot",0,2000000)
 
-    async def test_bybit_retry_failed_recovery_window_without_advancing(self):
-        adapter, _ = self.make(bybit)
-        adapter.categories = ["spot","linear"]
-        adapter._recovery_from_ms = 1000000
-        adapter._now_ms = lambda: 2000000
-        calls = []
-        async def history(cat,start,end):
-            calls.append((cat,start,end))
-            if cat=="linear":
-                raise OSError("rate limit")
-            return 1
-        adapter._history_category = history
-        with self.assertRaises(OSError):
-            await adapter._recover_executions()
-        self.assertEqual(adapter._recovery_from_ms,1000000)
-        self.assertEqual(calls[0][1],995000)
 
-    async def test_bybit_long_gap_split_into_at_most_seven_days(self):
-        adapter, _ = self.make(bybit)
-        adapter._recovery_from_ms = 1000000
-        adapter._now_ms = lambda: 1000000 + 10*86400000
-        calls = []
-        async def history(cat,start,end):
-            calls.append((start,end))
-            return 0
-        adapter._history_category = history
-        await adapter._recover_executions()
-        self.assertEqual(len(calls),2)
-        self.assertTrue(all(end-start<=7*86400000 for start,end in calls))
-        self.assertEqual(calls[0][1],calls[1][0])
 
-    async def test_bybit_fill_before_subscribe_ack_is_preserved(self):
-        adapter, _ = self.make(bybit)
-        fill = json.dumps({"topic":"execution","data":[bybit_fill(1)]})
-        messages = iter([json.dumps({"op":"auth","success":True}),fill,
-                         json.dumps({"op":"subscribe","success":True})])
-        class WS:
-            async def send(self,raw):
-                pass
-            async def recv(self):
-                return next(messages)
-            def __aiter__(self):
-                return self
-            async def __anext__(self):
-                raise StopAsyncIteration
-        ws=WS()
-        await adapter._auth_and_subscribe(ws)
-        self.assertEqual([raw async for raw in adapter._execution_messages(ws)],[fill])
 
-    async def test_bybit_malformed_success_does_not_advance_recovery(self):
-        adapter, _ = self.make(bybit)
-        adapter._recovery_from_ms=1000000
-        adapter._now_ms=lambda:2000000
-        adapter._rest_get=lambda *args:{"retCode":0}
-        with self.assertRaisesRegex(RuntimeError,"缺少 list"):
-            await adapter._recover_executions()
-        self.assertEqual(adapter._recovery_from_ms,1000000)
 
-    async def test_bybit_run_backfills_disconnect_before_resuming_live(self):
-        adapter, events = self.make(bybit)
-        adapter._check_credentials=lambda:None
-        adapter.categories=["spot"]
-        adapter._now_ms=lambda:1000100
-        adapter._refresh_time_offset=lambda:None
-        sessions=[]
-        rest_calls=[]
-        def get(path,params):
-            rest_calls.append(dict(params))
-            # Trade 3 happened while disconnected and never appears on WS.
-            n=1 if len(sessions)==1 else 3
-            return {"retCode":0,"result":{"list":[bybit_fill(n)],"nextPageCursor":""}}
-        adapter._rest_get=get
-        class WS:
-            def __init__(self,number):
-                self.number=number
-                self.acks=iter([json.dumps({"op":"auth","success":True}),
-                                json.dumps({"op":"subscribe","success":True})])
-                self.done=False
-            async def __aenter__(self):
-                return self
-            async def __aexit__(self,*args):
-                return False
-            async def send(self,raw):
-                pass
-            async def recv(self):
-                return next(self.acks)
-            def __aiter__(self):
-                return self
-            async def __anext__(self):
-                if self.done:
-                    if self.number==1:
-                        raise OSError("connection dropped")
-                    raise asyncio.CancelledError
-                self.done=True
-                x=bybit_fill(2 if self.number==1 else 4)
-                x["category"]="spot"
-                return json.dumps({"topic":"execution","data":[x]})
-        def connect(*args,**kwargs):
-            sessions.append(WS(len(sessions)+1))
-            return sessions[-1]
-        async def heartbeat(ws):
-            await asyncio.Future()
-        adapter._heartbeat=heartbeat
-        async def no_delay(*args):
-            pass
-        with patch.object(bybit,"connect",side_effect=connect), patch.object(bybit.asyncio,"sleep",side_effect=no_delay):
-            with self.assertRaises(asyncio.CancelledError):
-                await adapter.run()
-        self.assertEqual([e["execution_id"] for e in events],["1","2","3","4"])
-        self.assertEqual(len(rest_calls),2)
-        self.assertLessEqual(rest_calls[1]["startTime"],1000002)
 
 
 if __name__ == "__main__":

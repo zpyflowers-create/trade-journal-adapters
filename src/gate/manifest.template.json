@@ -1,0 +1,52 @@
+{
+  "type": "gate",
+  "name": "Gate",
+  "version": "1.2.3-rc1",
+  "description": "成交分页与断线恢复候选源码；未签名，未发布。",
+  "entrypoint": "adapter.py",
+  "fields": [
+    {
+      "key": "environment",
+      "label": "账户环境",
+      "kind": "select",
+      "options": [
+        [
+          "live",
+          "实盘"
+        ],
+        [
+          "testnet",
+          "模拟 / TestNet"
+        ]
+      ],
+      "default": "live"
+    },
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "secret": false,
+      "required": true,
+      "placeholder": "Gate API Key"
+    },
+    {
+      "key": "api_secret",
+      "label": "API Secret",
+      "secret": true,
+      "required": true,
+      "placeholder": "Gate API Secret"
+    },
+    {
+      "key": "enable_spot",
+      "label": "监听现货",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "enable_futures",
+      "label": "监听 USDT 永续",
+      "kind": "checkbox",
+      "default": true
+    }
+  ],
+  "files": {}
+}

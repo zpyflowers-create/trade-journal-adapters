@@ -14,6 +14,9 @@ LINES = ['# Trades', 'execution price quantity', 'signature timestamp', 'fee USD
 
 class WatchTests(unittest.TestCase):
     def setUp(self):
+        env = patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'openai'})
+        env.start()
+        self.addCleanup(env.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -93,7 +96,7 @@ class WatchTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *a): return False
             def read(self, *a): return json.dumps(response).encode()
-        with patch.object(watch, 'urlopen', return_value=Reply()) as send:
+        with patch.object(watch, 'ai_open', return_value=Reply()) as send:
             decision, candidate = watch.ai_repair('bybit', self.provider, [], self.root, 'fixture-key', 'configured-model')
         self.assertEqual(decision['status'], 'unsigned_ai_candidate')
         self.assertEqual(candidate['original_sha256'], watch.sha(self.code))
@@ -101,6 +104,98 @@ class WatchTests(unittest.TestCase):
         payload=json.loads(send.call_args.args[0].data)
         self.assertFalse(payload['store'])
         self.assertEqual(payload['text']['format']['type'], 'json_schema')
+
+    def deepseek_reply(self, content, finish='stop', **message_fields):
+        response = {'choices': [{'finish_reason': finish, 'message': dict(content=content, **message_fields)}]}
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, *a): return json.dumps(response).encode()
+        return Reply()
+
+    def test_deepseek_candidate_uses_official_endpoint_and_json_contract(self):
+        code = self.code + '\n# deepseek fixture\n'
+        proposal = json.dumps({'requires_change': True, 'summary': 'fixture', 'adapter_code': code})
+        with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek'}), \
+                patch.object(watch, 'ai_open', return_value=self.deepseek_reply(proposal)) as send:
+            decision, candidate = watch.ai_repair('bybit', self.provider, [], self.root, 'fixture-key', 'fixture-model')
+        self.assertEqual(decision['status'], 'unsigned_ai_candidate')
+        self.assertEqual(candidate['content'], code)
+        self.assertEqual((self.root / 'sources/bybit/adapter.py').read_text(), self.code)
+        request = send.call_args.args[0]
+        self.assertEqual(request.full_url, 'https://api.deepseek.com/chat/completions')
+        payload = json.loads(request.data)
+        self.assertEqual(payload['response_format'], {'type': 'json_object'})
+        self.assertIn('JSON schema:', payload['messages'][0]['content'])
+        self.assertFalse(payload['stream'])
+        self.assertEqual(payload['max_tokens'], 24000)
+        self.assertNotIn('fixture-key', request.data.decode())
+        self.assertNotIn('store', payload)
+
+    def test_deepseek_rejects_empty_truncated_and_invalid_schema(self):
+        good = {'requires_change': False, 'summary': 'fixture', 'adapter_code': ''}
+        cases = [('', 'stop'), ('   ', 'stop'), (json.dumps(good), 'length'),
+                 (json.dumps(dict(good, requires_change='true')), 'stop'),
+                 (json.dumps(dict(good, adapter_code=123)), 'stop'),
+                 (json.dumps(dict(good, unexpected='value')), 'stop')]
+        for content, finish in cases:
+            with self.subTest(content=content, finish=finish), \
+                    patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek'}), \
+                    patch.object(watch, 'ai_open', return_value=self.deepseek_reply(content, finish)):
+                decision, candidate = watch.ai_repair('bybit', self.provider, [], self.root, 'fixture-key', 'fixture-model')
+                self.assertEqual(decision['status'], 'manual_review')
+                self.assertIsNone(candidate)
+
+    def test_deepseek_no_change_and_tool_calls_are_not_applied(self):
+        proposal = json.dumps({'requires_change': False, 'summary': 'no supported change', 'adapter_code': ''})
+        for fields, expected in [({}, 'ai_no_supported_change'), ({'tool_calls': [{'id': 'fixture'}]}, 'manual_review')]:
+            with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek'}), \
+                    patch.object(watch, 'ai_open', return_value=self.deepseek_reply(proposal, **fields)):
+                decision, candidate = watch.ai_repair('bybit', self.provider, [], self.root, 'fixture-key', 'fixture-model')
+                self.assertEqual(decision['status'], expected)
+                self.assertIsNone(candidate)
+
+    def test_deepseek_still_rejects_identity_and_dependency_changes(self):
+        for code in ["class Adapter:\n TYPE='gate'\n", 'import subprocess\n' + self.code]:
+            proposal = json.dumps({'requires_change': True, 'summary': 'fixture', 'adapter_code': code})
+            with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek'}), \
+                    patch.object(watch, 'ai_open', return_value=self.deepseek_reply(proposal)):
+                decision, candidate = watch.ai_repair('bybit', self.provider, [], self.root, 'fixture-key', 'fixture-model')
+                self.assertEqual(decision['status'], 'manual_review')
+                self.assertIsNone(candidate)
+
+    def test_selected_backend_never_falls_back_to_other_key(self):
+        env = {'OPENAI_API_KEY': 'openai-fixture', 'ADAPTER_REPAIR_PROVIDER': 'deepseek',
+               'ADAPTER_REPAIR_MODEL': 'fixture-model'}
+        self.assertFalse(watch.ai_configuration(env)['key'])
+        env['DEEPSEEK_API_KEY'] = 'deepseek-fixture'
+        with patch.dict(os.environ, env, clear=True):
+            calls = []
+            def repair(*args):
+                calls.append(args)
+                return {'status': 'manual_review', 'summary': 'fixture'}, None
+            watch.scan(self.root, self.baseline(), fetcher=lambda *a: LINES + ['fee changed'], repair=repair)
+        self.assertEqual(calls[0][-2:], ('deepseek-fixture', 'fixture-model'))
+
+    def test_unsupported_backend_never_sends_credentials(self):
+        with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'https://unreviewed.example'}), \
+                patch.object(watch, 'ai_open') as send:
+            decision, candidate = watch.ai_repair('bybit', self.provider, [], self.root, 'fixture-key', 'fixture-model')
+        send.assert_not_called()
+        self.assertEqual(decision['status'], 'manual_review')
+        self.assertIsNone(candidate)
+
+    def test_ai_redirects_are_blocked(self):
+        with self.assertRaises(ValueError):
+            watch.BlockAIRedirect().redirect_request(None, None, 307, '', {}, 'https://unreviewed.example')
+
+    def test_upstream_error_does_not_expose_credentials(self):
+        with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek'}), \
+                patch.object(watch, 'ai_open', side_effect=RuntimeError('fixture-secret-in-upstream-error')):
+            decision, candidate = watch.ai_repair('bybit', self.provider, [], self.root, 'fixture-key', 'fixture-model')
+        self.assertNotIn('fixture-secret', json.dumps(decision))
+        self.assertEqual(decision['status'], 'manual_review')
+        self.assertIsNone(candidate)
 
     def test_code_cannot_change_identity_or_add_dependencies(self):
         for code in ["class Adapter:\n TYPE='gate'\n", "import subprocess\n" + self.code]:

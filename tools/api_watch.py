@@ -145,6 +145,26 @@ def ai_open(request):
     return build_opener(BlockAIRedirect()).open(request, timeout=180)
 
 
+def verify_ai_connection():
+    config = ai_configuration()
+    endpoints = {'openai': 'https://api.openai.com/v1/models',
+                 'deepseek': 'https://api.deepseek.com/models'}
+    if config['backend'] not in endpoints or not config['key'] or not config['model']:
+        raise ValueError('AI provider, credentials or model not configured')
+    request = Request(endpoints[config['backend']],
+                      headers={'Authorization': 'Bearer ' + config['key']}, method='GET')
+    try:
+        with ai_open(request) as response:
+            raw = response.read(2 * 1024 * 1024 + 1)
+        if len(raw) > 2 * 1024 * 1024:
+            raise ValueError('Oversized response')
+        models = json.loads(raw)['data']
+        if not any(item.get('id') == config['model'] for item in models):
+            raise ValueError('Configured model not listed')
+    except Exception:
+        raise ValueError('AI connection/model verification failed; check the selected provider, secret and model.') from None
+
+
 def ai_repair(provider_id, provider, changes, root, api_key, model):
     source = provider.get('source')
     backend = ai_configuration()['backend']
@@ -272,11 +292,18 @@ def apply_candidate(root, result):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['scan', 'apply'])
+    parser.add_argument('command', choices=['scan', 'apply', 'check-ai'])
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--state', type=Path)
     parser.add_argument('--candidate', type=Path, default=Path('candidate.json'))
     args = parser.parse_args()
+    if args.command == 'check-ai':
+        try:
+            verify_ai_connection()
+        except ValueError as error:
+            raise SystemExit(str(error)) from None
+        print('AI credentials and configured model verified. No generation request sent.')
+        return
     if args.command == 'apply':
         apply_candidate(args.root, json.loads(args.candidate.read_text()))
         return

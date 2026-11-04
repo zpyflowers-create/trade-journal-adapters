@@ -10,6 +10,11 @@ on:
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
+    inputs:
+      check_ai_connection:
+        description: '同时验证 AI 密钥和模型列表（不请求生成代码）'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -46,6 +51,14 @@ jobs:
           print('AI candidate configuration: ready' if not missing else 'AI candidate configuration: missing ' + ', '.join(missing))
           print('Official document monitoring works without AI credentials.')
           PY
+      - name: 手动验证 AI 密钥和模型，不请求生成代码
+        if: github.event_name == 'workflow_dispatch' && inputs.check_ai_connection
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ADAPTER_REPAIR_PROVIDER: ${{ vars.ADAPTER_REPAIR_PROVIDER }}
+          ADAPTER_REPAIR_MODEL: ${{ vars.ADAPTER_REPAIR_MODEL }}
+        run: python3 tools/api_watch.py check-ai
       - name: 读取独立监测检查点
         env:
           GH_TOKEN: ${{ github.token }}

@@ -189,6 +189,39 @@ class WatchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             watch.BlockAIRedirect().redirect_request(None, None, 307, '', {}, 'https://unreviewed.example')
 
+    def test_connection_check_reads_models_without_generation(self):
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, *a): return b'{"data":[{"id":"fixture-model"}]}'
+        with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek', 'DEEPSEEK_API_KEY': 'fixture-key',
+                                    'ADAPTER_REPAIR_MODEL': 'fixture-model'}), \
+                patch.object(watch, 'ai_open', return_value=Reply()) as send:
+            watch.verify_ai_connection()
+        request = send.call_args.args[0]
+        self.assertEqual(request.full_url, 'https://api.deepseek.com/models')
+        self.assertEqual(request.get_method(), 'GET')
+        self.assertIsNone(request.data)
+
+    def test_connection_check_missing_key_never_sends(self):
+        with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek', 'ADAPTER_REPAIR_MODEL': 'fixture-model'}, clear=True), \
+                patch.object(watch, 'ai_open') as send:
+            with self.assertRaises(ValueError):
+                watch.verify_ai_connection()
+        send.assert_not_called()
+
+    def test_connection_check_missing_model_and_upstream_errors_are_redacted(self):
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, *a): return b'{"data":[]}'
+        for kwargs in [{'return_value': Reply()}, {'side_effect': RuntimeError('fixture-private-error')}]:
+            with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek', 'DEEPSEEK_API_KEY': 'fixture-key',
+                                        'ADAPTER_REPAIR_MODEL': 'fixture-model'}), \
+                    patch.object(watch, 'ai_open', **kwargs), self.assertRaises(ValueError) as error:
+                watch.verify_ai_connection()
+            self.assertNotIn('fixture-private', str(error.exception))
+
     def test_upstream_error_does_not_expose_credentials(self):
         with patch.dict(os.environ, {'ADAPTER_REPAIR_PROVIDER': 'deepseek'}), \
                 patch.object(watch, 'ai_open', side_effect=RuntimeError('fixture-secret-in-upstream-error')):

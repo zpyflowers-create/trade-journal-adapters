@@ -4,3 +4,8 @@
 *private-backup*
 __pycache__/
 *.pyc
+*.secret.txt
+candidate.json
+candidate-tests.txt
+watch-state.json
+release-ready.json

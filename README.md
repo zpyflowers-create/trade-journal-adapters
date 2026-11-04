@@ -28,3 +28,12 @@ python3 -m unittest discover -s tools -p 'test_adapter_release.py'
 ```
 
 
+
+## 官方 API 监测与后续发布
+
+已提供每小时监测、可选 AI 未签名候选、独立离线测试与审核后签名发布的 GitHub Actions 配置。首次需要启用 Actions PR 权限，并按需设置 AI API 密钥、模型和受审核环境中的签名密钥。代码未配置这些密钥时不会假装自动修复或绕过签名。
+
+- [一次性配置与运行步骤](自动更新流程配置.md)
+- [新增交易所或券商](新增交易所接入.md)
+
+IBKR 当前只监测官方 Flex 文档；自动代码候选先覆盖 Bybit 和 Gate。NAS 凭据和数据继续留在 NAS。

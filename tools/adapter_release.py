@@ -89,7 +89,14 @@ def check_package(data, signer, expected_type=None, expected_version=None):
             if digest(content) != sha:
                 raise ValueError('Package file checksum mismatch')
             if name.endswith('.py'):
-                ast.parse(content, filename=name)
+                tree = ast.parse(content, filename=name)
+                if name == m['entrypoint']:
+                    cls = next((n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Adapter'), None)
+                    identity = next((n.value.value for n in cls.body if isinstance(n, ast.Assign)
+                                     and any(isinstance(t, ast.Name) and t.id == 'TYPE' for t in n.targets)
+                                     and isinstance(n.value, ast.Constant)), None) if cls else None
+                    if identity != m['type']:
+                        raise ValueError('Adapter.TYPE must match the manifest type')
         return m
 
 
@@ -137,8 +144,17 @@ def build(args):
     if not re.fullmatch(r'[a-z][a-z0-9_-]*', typ):
         raise ValueError('Invalid Adapter type')
     old = next((i for i in registry['adapters'] if i['type'] == typ), None)
-    if old is None:
-        raise ValueError('New Adapter onboarding requires a reviewed registry entry first')
+    initial = old is None
+    if initial and not getattr(args, 'initial', False):
+        raise ValueError('New Adapter onboarding requires explicit --initial')
+    if initial:
+        base_url = str(getattr(args, 'package_base_url', '') or '').rstrip('/')
+        if not base_url.startswith('https://raw.githubusercontent.com/') or not base_url.endswith('/main/' + typ):
+            raise ValueError('Initial release requires a raw GitHub main package URL for this Adapter')
+        minimum = str(getattr(args, 'min_bridge_version', '') or '')
+        version(minimum)
+        old = dict(type=typ, name=m['name'], version='0.0.0', package_url=base_url + '/placeholder.zip', min_bridge_version=minimum)
+        registry['adapters'].append(old)
     if version(args.version) <= version(old['version']):
         raise ValueError('New version must exceed the published version')
     files = {}
@@ -154,10 +170,11 @@ def build(args):
             raise ValueError('Source contains unsupported files; keep keys outside the source tree')
         files[name] = p.read_bytes()
     hashes = {name: digest(data) for name, data in files.items()}
-    with zipfile.ZipFile(root / typ / f"{typ}-{old['version']}.zip") as z:
-        previous = json.loads(z.read('manifest.json'))['files']
-    if {k: v for k, v in hashes.items() if k.endswith('.py')} == {k: v for k, v in previous.items() if k.endswith('.py')}:
-        raise ValueError('Python source is unchanged; refusing a version-only release')
+    if not initial:
+        with zipfile.ZipFile(root / typ / f"{typ}-{old['version']}.zip") as z:
+            previous = json.loads(z.read('manifest.json'))['files']
+        if {k: v for k, v in hashes.items() if k.endswith('.py')} == {k: v for k, v in previous.items() if k.endswith('.py')}:
+            raise ValueError('Python source is unchanged; refusing a version-only release')
     m = {k: m.get(k) for k in FIELDS}
     m.update(version=args.version, files=hashes)
     signer = json.loads(args.signer.read_text())
@@ -187,6 +204,7 @@ def build(args):
         raise ValueError('Public signer must already be staged in trusted-signers')
     if json.loads(public_path.read_text()) != signer:
         raise ValueError('Staged public signer differs from the selected signer')
+    package.parent.mkdir(parents=True, exist_ok=True)
     package.write_bytes(data)
     package.with_suffix('.sha256').write_text(f'{digest(data)}  {filename}\n')
     # Publish the registry last; local generation does not upload or install anything.
@@ -210,6 +228,9 @@ def main():
     release.add_argument('--private-key', type=Path, required=True)
     release.add_argument('--signer', type=Path, required=True)
     release.add_argument('--notes', required=True)
+    release.add_argument('--initial', action='store_true', help='Explicitly onboard a tested new Adapter')
+    release.add_argument('--package-base-url')
+    release.add_argument('--min-bridge-version')
     args = p.parse_args()
     try:
         verify_registry(args.root) if args.command == 'verify' else build(args)

@@ -40,6 +40,10 @@ class ReleaseTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / 'repo'
         shutil.copytree(ROOT, self.root, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        # Release-tool fixtures use the published baseline even while a repair PR
+        # intentionally changes the maintained source under test elsewhere.
+        with zipfile.ZipFile(self.root / 'bybit/bybit-1.1.5.zip') as archive:
+            (self.root / 'sources/bybit/adapter.py').write_bytes(archive.read('adapter.py'))
         self.public = self.root / 'trusted-signers' / 'offline-test.json'
         self.public.write_text(json.dumps(self.signer))
         self.args = argparse.Namespace(root=self.root, source=self.root / 'sources/bybit', version='1.1.6',
@@ -108,6 +112,27 @@ class ReleaseTests(unittest.TestCase):
         (self.args.source / 'publisher.pem').write_text('not an actual key')
         with self.assertRaisesRegex(ValueError, 'unsupported files'):
             release.build(self.args)
+
+    def test_new_provider_requires_explicit_onboarding(self):
+        source = self.root / 'sources/newvenue'
+        shutil.copytree(self.args.source, source)
+        manifest = json.loads((source / 'manifest.json').read_text())
+        manifest.update(type='newvenue', name='New venue fixture')
+        (source / 'manifest.json').write_text(json.dumps(manifest))
+        adapter=source / 'adapter.py'
+        adapter.write_text(adapter.read_text().replace('TYPE = "bybit"', 'TYPE = "newvenue"'))
+        self.args.source = source
+        self.args.version = '1.0.0'
+        with self.assertRaisesRegex(ValueError, '--initial'):
+            release.build(self.args)
+        self.args.initial = True
+        self.args.package_base_url = 'https://raw.githubusercontent.com/owner/repo/main/newvenue'
+        self.args.min_bridge_version = '2.10.0'
+        with contextlib.redirect_stdout(io.StringIO()):
+            release.build(self.args)
+            release.verify_registry(self.root)
+        registry = json.loads((self.root / 'registry.json').read_text())
+        self.assertIn('newvenue', [item['type'] for item in registry['adapters']])
 
 
 if __name__ == '__main__':

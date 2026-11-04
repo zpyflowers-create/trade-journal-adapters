@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "max_ai_requests": 2,
+  "providers": {
+    "bybit": {
+      "name": "Bybit",
+      "source": "sources/bybit/adapter.py",
+      "keywords": [
+        "execution",
+        "execfee",
+        "execqty",
+        "execprice",
+        "fee",
+        "position",
+        "stoploss",
+        "signature",
+        "authentication",
+        "rate limit",
+        "pagination",
+        "cursor",
+        "api key",
+        "deprecated"
+      ],
+      "documents": [
+        {
+          "id": "bybit-changelog",
+          "url": "https://raw.githubusercontent.com/bybit-exchange/docs/master/docs/changelog/v5.mdx",
+          "format": "markdown",
+          "critical": false
+        },
+        {
+          "id": "bybit-executions",
+          "url": "https://raw.githubusercontent.com/bybit-exchange/docs/master/docs/v5/order/execution.mdx",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "bybit-guide",
+          "url": "https://raw.githubusercontent.com/bybit-exchange/docs/master/docs/v5/guide.mdx",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "bybit-ws-execution",
+          "url": "https://raw.githubusercontent.com/bybit-exchange/docs/master/docs/v5/websocket/private/execution.mdx",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "bybit-ws-order",
+          "url": "https://raw.githubusercontent.com/bybit-exchange/docs/master/docs/v5/websocket/private/order.mdx",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "bybit-ws-position",
+          "url": "https://raw.githubusercontent.com/bybit-exchange/docs/master/docs/v5/websocket/private/position.mdx",
+          "format": "markdown",
+          "critical": true
+        }
+      ]
+    },
+    "gate": {
+      "name": "Gate",
+      "source": "sources/gate/adapter.py",
+      "keywords": [
+        "my_trades",
+        "usertrades",
+        "user trades",
+        "authentication",
+        "signature",
+        "timestamp",
+        "rate limit",
+        "pagination",
+        "deprecated",
+        "fee",
+        "position",
+        "size",
+        "reduce_only",
+        "price_order"
+      ],
+      "documents": [
+        {
+          "id": "gate-rest",
+          "url": "https://www.gate.com/docs/developers/apiv4/en/",
+          "format": "html",
+          "critical": false
+        },
+        {
+          "id": "gate-spot-ws",
+          "url": "https://www.gate.com/docs/developers/apiv4/ws/en/",
+          "format": "html",
+          "critical": false
+        },
+        {
+          "id": "gate-futures-ws",
+          "url": "https://www.gate.com/docs/developers/futures/ws/en/",
+          "format": "html",
+          "critical": false
+        }
+      ]
+    },
+    "ibkr": {
+      "name": "IBKR Flex Web Service",
+      "source": null,
+      "keywords": [
+        "token",
+        "query",
+        "sendrequest",
+        "getstatement",
+        "limit",
+        "error",
+        "xml",
+        "csv",
+        "trade",
+        "execution",
+        "deprecated"
+      ],
+      "documents": [
+        {
+          "id": "ibkr-generate",
+          "url": "https://www.interactivebrokers.com/docs/web-api/flex-web-service/using-flex-web-service/generate-the-report",
+          "format": "html",
+          "critical": true
+        },
+        {
+          "id": "ibkr-retrieve",
+          "url": "https://www.interactivebrokers.com/docs/web-api/flex-web-service/using-flex-web-service/retrieve-the-report.md",
+          "format": "markdown",
+          "critical": true
+        }
+      ]
+    }
+  },
+  "allowed_document_hosts": [
+    "raw.githubusercontent.com",
+    "www.gate.com",
+    "www.interactivebrokers.com",
+    "ibkrcampus.com"
+  ]
+}

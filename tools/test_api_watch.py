@@ -67,6 +67,19 @@ class WatchTests(unittest.TestCase):
         self.assertTrue(result['errors'])
         self.assertFalse(result['actionable'])
 
+    def test_optional_source_failure_is_visible_without_blocking_required_sources(self):
+        config=json.loads((self.root / 'automation/providers.json').read_text())
+        config['providers']['bybit']['documents'].append(dict(self.doc,id='optional',optional=True))
+        (self.root / 'automation/providers.json').write_text(json.dumps(config))
+        def fetch(doc,*a):
+            if doc.get('optional'):raise OSError('fixture optional site outage')
+            return LINES
+        result=watch.scan(self.root,{},fetcher=fetch)
+        self.assertFalse(result['errors'])
+        self.assertEqual(result['warnings'][0]['document'],'optional')
+        self.assertIn('doc',result['state'])
+        self.assertNotIn('optional',result['state'])
+
     def test_missing_ai_credentials_does_not_claim_repair(self):
         result, patch = watch.ai_repair('bybit', self.provider, [], self.root, '', '')
         self.assertEqual(result['status'], 'manual_review')

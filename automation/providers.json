@@ -84,19 +84,64 @@
           "id": "gate-rest",
           "url": "https://www.gate.com/docs/developers/apiv4/en/",
           "format": "html",
-          "critical": false
+          "critical": false,
+          "optional": true
         },
         {
           "id": "gate-spot-ws",
           "url": "https://www.gate.com/docs/developers/apiv4/ws/en/",
           "format": "html",
-          "critical": false
+          "critical": false,
+          "optional": true
         },
         {
           "id": "gate-futures-ws",
           "url": "https://www.gate.com/docs/developers/futures/ws/en/",
           "format": "html",
+          "critical": false,
+          "optional": true
+        },
+        {
+          "id": "gate-sdk-spot-api",
+          "url": "https://raw.githubusercontent.com/gateio/gateapi-python/master/docs/SpotApi.md",
+          "format": "markdown",
           "critical": false
+        },
+        {
+          "id": "gate-sdk-futures-api",
+          "url": "https://raw.githubusercontent.com/gateio/gateapi-python/master/docs/FuturesApi.md",
+          "format": "markdown",
+          "critical": false
+        },
+        {
+          "id": "gate-sdk-spot-trade",
+          "url": "https://raw.githubusercontent.com/gateio/gateapi-python/master/docs/Trade.md",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "gate-sdk-futures-trade",
+          "url": "https://raw.githubusercontent.com/gateio/gateapi-python/master/docs/MyFuturesTradeTimeRange.md",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "gate-sdk-api-auth",
+          "url": "https://raw.githubusercontent.com/gateio/gateapi-python/master/gate_api/api_client.py",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "gate-sdk-ws-spot",
+          "url": "https://raw.githubusercontent.com/gateio/gatews/master/go/response_spot.go",
+          "format": "markdown",
+          "critical": true
+        },
+        {
+          "id": "gate-sdk-ws-futures",
+          "url": "https://raw.githubusercontent.com/gateio/gatews/master/go/response_future.go",
+          "format": "markdown",
+          "critical": true
         }
       ]
     },

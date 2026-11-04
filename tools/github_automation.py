@@ -75,6 +75,8 @@ def report_markdown(result):
             parts.append(f"- {change['provider']} / {change['document_id']}: {change['url']}（新增 {change['added_line_count']} 行，移除 {change['removed_line_count']} 行）")
     if result.get('errors'):
         parts += ['', '部分官方来源抓取失败，旧检查点保留；本报告不代表这些来源已检查成功。']
+    if result.get('warnings'):
+        parts += ['', '附加官网来源暂不可读，未计为检查成功；主要官方 SDK 来源继续监测，官网读取会在后续运行重试。']
     parts += ['', '下一步：审核接口含义和候选修改，补充相应回归用例。源码审核合并后，在 Actions 手动运行“审核后签名发布”，选择 main 的准确提交和新版本。网页安装仍由用户点击。']
     return '\n'.join(parts) + '\n'
 
@@ -100,7 +102,7 @@ def publish_watch(api, result, root):
         fingerprint = hashlib.sha256(json.dumps({'changes': result['changes'], 'patches': result.get('patches', [])}, sort_keys=True).encode()).hexdigest()[:20]
         branch = 'api-watch/candidate-' + fingerprint
         files[f'automation/reports/{fingerprint}.md'] = report_markdown(result)
-        files[f'automation/reports/{fingerprint}.json'] = json.dumps({k: result[k] for k in ('checked_at', 'changes', 'decisions', 'errors')}, ensure_ascii=False, indent=2) + '\n'
+        files[f'automation/reports/{fingerprint}.json'] = json.dumps({k: result.get(k, []) for k in ('checked_at', 'changes', 'decisions', 'errors', 'warnings')}, ensure_ascii=False, indent=2) + '\n'
         # Existing candidate branches may have human edits. Never overwrite them.
         if not api.head(branch):
             api.commit_files(branch, files, 'Review official API compatibility changes', main)

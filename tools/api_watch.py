@@ -165,20 +165,20 @@ def ai_repair(provider_id, provider, changes, root, api_key, model):
 def scan(root, previous, fetcher=fetch_document, repair=ai_repair):
     config = json.loads((root / 'automation/providers.json').read_text())
     state = dict(previous)
-    changes, errors, patches, decisions = [], [], [], {}
+    changes, errors, warnings, patches, decisions = [], [], [], [], {}
     tasks = [(pid, p, d) for pid, p in config['providers'].items() for d in p['documents']]
     def fetch(task):
         pid, p, d = task
         try:
             lines = fetcher(d, config['allowed_document_hosts'])
             snapshot, delta = source_change(d, p, lines, previous.get(d['id']))
-            return pid, d['id'], snapshot, delta, None
+            return pid, d['id'], snapshot, delta, None, bool(d.get('optional'))
         except Exception:
-            return pid, d['id'], None, None, 'Official source fetch/parse failed; previous checkpoint retained.'
+            return pid, d['id'], None, None, 'Official source fetch/parse failed; previous checkpoint retained.', bool(d.get('optional'))
     with ThreadPoolExecutor(max_workers=4) as pool:
-        for pid, docid, snapshot, delta, error in pool.map(fetch, tasks):
+        for pid, docid, snapshot, delta, error, optional in pool.map(fetch, tasks):
             if error:
-                errors.append({'provider': pid, 'document': docid, 'message': error})
+                (warnings if optional else errors).append({'provider': pid, 'document': docid, 'message': error})
             else:
                 state[docid] = snapshot
                 if delta:
@@ -201,7 +201,7 @@ def scan(root, previous, fetcher=fetch_document, repair=ai_repair):
         c.pop('_context', None)
     return {'schema_version': 1, 'checked_at': datetime.now(timezone.utc).isoformat(), 'state': state,
             'state_changed': state != previous, 'changes': changes, 'decisions': decisions,
-            'patches': patches, 'errors': errors,
+            'patches': patches, 'errors': errors, 'warnings': warnings,
             'actionable': bool(decisions), 'signed': False}
 
 
@@ -236,7 +236,7 @@ def main():
     previous = json.loads(args.state.read_text()) if args.state and args.state.exists() else {}
     result = scan(args.root, previous)
     args.candidate.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
-    print(json.dumps({k: result[k] for k in ('actionable', 'state_changed', 'errors')}, ensure_ascii=False))
+    print(json.dumps({k: result[k] for k in ('actionable', 'state_changed', 'errors', 'warnings')}, ensure_ascii=False))
     if result['errors'] and not result['state_changed']:
         raise SystemExit('Official source fetch failed; not a successful no-change check')
 

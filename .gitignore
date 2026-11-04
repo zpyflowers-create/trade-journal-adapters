@@ -1,0 +1,6 @@
+# Publisher private keys stay outside this repository.
+*.pem
+*.key
+*private-backup*
+__pycache__/
+*.pyc

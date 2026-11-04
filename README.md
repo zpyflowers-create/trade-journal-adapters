@@ -18,4 +18,13 @@
 - `binance/`
 - `okx/`
 
-当前 registry 可以先为空；发布第一个已签名 Adapter 后，再把对应版本写入 `registry.json`。
+当前稳定索引补齐 2026-10-23 R3 签名包：Bybit 1.1.5、Gate 1.2.3，最低 Bridge 2.10.0。已经安装同版本时不会显示升级按钮。
+
+维护源码见 `sources/`；签名打包与离线校验工具见 `tools/adapter_release.py`；具体步骤见[发布流程](发布流程.md)。工具不会联网发布或自动安装，API 变化仍需先评估、修改和测试。
+
+```bash
+python3 tools/adapter_release.py verify
+python3 -m unittest discover -s tools -p 'test_adapter_release.py'
+```
+
+

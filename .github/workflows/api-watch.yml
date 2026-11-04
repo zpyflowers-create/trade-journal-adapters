@@ -1,5 +1,12 @@
 name: 官方 API 变更监测
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/providers.json'
+      - '.github/workflows/api-watch.yml'
+      - 'tools/api_watch.py'
+      - 'tools/github_automation.py'
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
@@ -20,6 +27,17 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
+      - name: 检查代码候选配置状态，不输出密钥
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ADAPTER_REPAIR_MODEL: ${{ vars.ADAPTER_REPAIR_MODEL }}
+        run: |
+          python3 - <<'PY'
+          import os
+          missing=[name for name in ('OPENAI_API_KEY','ADAPTER_REPAIR_MODEL') if not os.environ.get(name)]
+          print('AI candidate configuration: ready' if not missing else 'AI candidate configuration: missing ' + ', '.join(missing))
+          print('Official document monitoring works without AI credentials.')
+          PY
       - name: 读取独立监测检查点
         env:
           GH_TOKEN: ${{ github.token }}

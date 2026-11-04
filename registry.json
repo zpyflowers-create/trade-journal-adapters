@@ -3,24 +3,24 @@
   "channel": "stable",
   "adapters": [
     {
-      "type": "gate",
-      "name": "Gate",
-      "version": "1.2.2",
-      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/gate/gate-1.2.2.zip",
-      "sha256": "0f816b5474c5b334d3cff48deea341f6819854481866fc6ce73534893df30963",
-      "published_at": "2026-09-20",
-      "release_notes": "修复 VPS/TLS 瞬时握手超时导致初始保护性止损监听误报；REST 自动重试，连续失败判定，恢复后自动恢复正常状态。",
-      "min_bridge_version": "2.6.51"
-    },
-    {
       "type": "bybit",
       "name": "Bybit",
-      "version": "1.1.2",
-      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/bybit/bybit-1.1.2.zip",
-      "sha256": "8a0380a5364202ba15c1b3ad4f7609a62203dfd7bf271b53097274f3fefc2a94",
-      "published_at": "2026-09-20",
-      "release_notes": "修复 req_timestamp/server_timestamp/recv_window 时间偏差；服务器时间中点校准，时间戳错误自动重签重试，恢复后自动恢复正常状态。",
-      "min_bridge_version": "2.6.51"
+      "version": "1.1.5",
+      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/bybit/bybit-1.1.5.zip",
+      "sha256": "b34b4230d3c3bcf29ba79ba6d225597f2d7159d0dedb5018439e73a3d0852184",
+      "published_at": "2026-11-04",
+      "release_notes": "保留 V2.10.0 订单/仓位 WS 和普通条件单人工确认；增强成交响应校验、时间中点校准和时间戳重签。 本次将 2026-10-23 已制作的 R3 签名包补发到在线源；与同版本本地安装包字节一致。",
+      "min_bridge_version": "2.10.0"
+    },
+    {
+      "type": "gate",
+      "name": "Gate",
+      "version": "1.2.3",
+      "package_url": "https://raw.githubusercontent.com/zpyflowers-create/trade-journal-adapters/main/gate/gate-1.2.3.zip",
+      "sha256": "13d6c35a901b37624e55856389a03f15f2ce80ea0477788bbdaed466913b9aa6",
+      "published_at": "2026-11-04",
+      "release_notes": "补齐成交分页，成功接收全窗口后推进水位；保留现有功能并合入网络/TLS 重试和止损失败恢复。 本次将 2026-10-23 已制作的 R3 签名包补发到在线源；与同版本本地安装包字节一致。",
+      "min_bridge_version": "2.10.0"
     }
   ]
 }

@@ -1,0 +1,73 @@
+name: 审核后签名发布
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: '已接入的平台 type，例如 bybit 或 gate'
+        required: true
+        type: string
+      version:
+        description: '真实兼容性修改的新版本号'
+        required: true
+        type: string
+      source_sha:
+        description: '已经人工审核并合并到 main 的完整 40 位提交 SHA'
+        required: true
+        type: string
+      notes:
+        description: '本次真实修改和验收说明'
+        required: true
+        type: string
+      confirm:
+        description: '确认审核后输入 PUBLISH'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: adapter-signed-release
+  cancel-in-progress: false
+jobs:
+  offline:
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'PUBLISH'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tools -p 'test_*.py'
+      - run: python3 tools/adapter_release.py verify
+  publish:
+    needs: offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: adapter-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: 核对审核提交并签名，只检查语法不执行 Adapter
+        env:
+          ADAPTER_TYPE: ${{ inputs.provider }}
+          ADAPTER_VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+          CONFIRM_RELEASE: ${{ inputs.confirm }}
+          ADAPTER_SIGNING_KEY_B64: ${{ secrets.ADAPTER_SIGNING_KEY_B64 }}
+        run: python3 tools/release_ci.py
+      - name: 原子提交安装包和更新索引
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN: ${{ inputs.source_sha }}
+        run: python3 tools/github_automation.py publish-release --file release-ready.json --expected-main "$EXPECTED_MAIN"

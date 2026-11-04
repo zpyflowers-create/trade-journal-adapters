@@ -1,0 +1,55 @@
+{
+  "type": "bybit",
+  "name": "Bybit",
+  "version": "1.1.5",
+  "description": "保留 V2.10.0 订单/仓位 WS 和普通条件单人工确认；增强成交响应校验、时间中点校准和时间戳重签。",
+  "entrypoint": "adapter.py",
+  "fields": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "secret": false,
+      "required": true,
+      "placeholder": "Bybit API Key"
+    },
+    {
+      "key": "api_secret",
+      "label": "API Secret",
+      "secret": true,
+      "required": true,
+      "placeholder": "Bybit API Secret"
+    },
+    {
+      "key": "environment",
+      "label": "账户环境",
+      "kind": "select",
+      "options": [
+        [
+          "live",
+          "实盘"
+        ],
+        [
+          "testnet",
+          "Testnet"
+        ],
+        [
+          "demo",
+          "Demo 模拟"
+        ]
+      ],
+      "default": "live"
+    },
+    {
+      "key": "enable_spot",
+      "label": "监听现货",
+      "kind": "checkbox",
+      "default": true
+    },
+    {
+      "key": "enable_perpetual",
+      "label": "监听 USDT 永续",
+      "kind": "checkbox",
+      "default": true
+    }
+  ]
+}

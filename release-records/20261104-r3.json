@@ -1,0 +1,45 @@
+{
+  "purpose": "republish_exact_20261023_r3_packages_to_online_registry",
+  "prepared_at": "2026-11-04",
+  "original_receipt": {
+    "status": "signed_candidate_not_deployed",
+    "built_for": "2.10.0",
+    "source_commit": "a7484e32ffb3f3a6f72a8e80f503c288166cf433",
+    "signer": {
+      "id": "trade-journal-adapter-publisher-20261023-r3",
+      "fingerprint": "8d7cdc99cd503bfb5f0bc288a3b7ef70ea3231ca78f69647d94dd1802ec312ba"
+    },
+    "packages": [
+      {
+        "type": "bybit",
+        "version": "1.1.5",
+        "filename": "bybit-1.1.5.zip",
+        "sha256": "b34b4230d3c3bcf29ba79ba6d225597f2d7159d0dedb5018439e73a3d0852184",
+        "signer_id": "trade-journal-adapter-publisher-20261023-r3",
+        "min_bridge_version": "2.10.0",
+        "source_sha256": "ad510881f8b3ed1b64133515e7dbcb52b9081489c81c36f34bdc4183bd6ae7e9"
+      },
+      {
+        "type": "gate",
+        "version": "1.2.3",
+        "filename": "gate-1.2.3.zip",
+        "sha256": "13d6c35a901b37624e55856389a03f15f2ce80ea0477788bbdaed466913b9aa6",
+        "signer_id": "trade-journal-adapter-publisher-20261023-r3",
+        "min_bridge_version": "2.10.0",
+        "source_sha256": "278b9a7ea40b736ab8d53328340bcd9761a88c4c1a0039a9661766bde9e62147"
+      }
+    ],
+    "production_trust_modified": false,
+    "stable_registry_modified": false
+  },
+  "validation": {
+    "bridge_2100_signature_validation": true,
+    "package_bytes_unchanged_from_20261023": true,
+    "bybit_existing_offline_tests_passed": 34,
+    "release_tool_tests_passed": 7,
+    "live_exchange_tests": false,
+    "nas_modified": false,
+    "new_private_key_generated": false
+  },
+  "notes": "Same versions as user screenshot. No version-only upgrade; no private key is included in repository files."
+}

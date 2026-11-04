@@ -1,0 +1,102 @@
+name: 官方 API 变更监测
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: official-api-watch
+  cancel-in-progress: false
+jobs:
+  watch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: 读取独立监测检查点
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/github_automation.py state --file watch-state.json
+      - name: 抓取官方来源并生成未签名候选
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ADAPTER_REPAIR_MODEL: ${{ vars.ADAPTER_REPAIR_MODEL }}
+        run: python3 tools/api_watch.py scan --state watch-state.json --candidate candidate.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: api-watch-candidate
+          path: candidate.json
+          retention-days: 7
+  candidate-tests:
+    needs: watch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: api-watch-candidate
+      - name: 验证路径并应用候选到临时工作区
+        run: python3 tools/api_watch.py apply --candidate candidate.json
+      - name: 无账户密钥的离线回归
+        id: tests
+        continue-on-error: true
+        run: python3 -m unittest discover -s tools -p 'test_*.py'
+      - name: 保存测试结果，不阻止报告待审核问题
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: python3 -c "import os,pathlib; pathlib.Path('candidate-tests.txt').write_text(os.environ['TEST_OUTCOME'])"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: api-watch-test-result
+          path: candidate-tests.txt
+          retention-days: 7
+  propose:
+    needs: [watch, candidate-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: api-watch-candidate
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: api-watch-test-result
+      - name: 将测试结论写入候选报告
+        run: |
+          python3 - <<'PY'
+          import json,pathlib
+          path=pathlib.Path('candidate.json'); data=json.loads(path.read_text())
+          outcome=pathlib.Path('candidate-tests.txt').read_text().strip()
+          for item in data['decisions'].values():
+              item['summary'] += '\n\n离线候选测试：' + outcome + '。仍需人工审核和必要的真实账户验收。'
+          path.write_text(json.dumps(data,ensure_ascii=False))
+          PY
+      - name: 创建待审核 PR 和记录文档指纹
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/github_automation.py propose --file candidate.json
